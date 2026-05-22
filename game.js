@@ -56,27 +56,14 @@ resize();
 // ─── iOS Audio Context unlock ───
 let audioUnlocked = false;
 const AudioContext = window.AudioContext || window.webkitAudioContext;
-let audioCtx = null;
+let audioCtx = AudioContext ? new AudioContext() : null;
 
 function unlockAudio() {
     if (audioUnlocked) return;
     audioUnlocked = true;
-    // Create and resume AudioContext (required for iOS Safari)
-    if (AudioContext) {
-        audioCtx = new AudioContext();
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
-        }
+    if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
     }
-    // Play a silent buffer to unlock audio on iOS
-    const silentSound = new Audio();
-    silentSound.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-    silentSound.volume = 0;
-    silentSound.play().then(() => silentSound.pause()).catch(() => {});
-    // Pre-warm all game sounds
-    Object.values(sounds).forEach(s => {
-        if (s) { s.load(); }
-    });
 }
 
 // ─── Asset loading ───
@@ -94,24 +81,37 @@ function loadImage(name, src) {
 
 function loadSound(name, src) {
     totalAssets++;
-    const audio = new Audio(src);
-    audio.preload = 'auto';
-    audio.addEventListener('canplaythrough', () => { assetsLoaded++; }, { once: true });
-    audio.addEventListener('error', () => { console.warn('Failed to load', src); assetsLoaded++; }, { once: true });
-    // Timeout fallback — mobile may never fire canplaythrough
-    setTimeout(() => {
-        if (!audio.readyState) assetsLoaded++;
-    }, 3000);
-    sounds[name] = audio;
+    fetch(src)
+        .then(response => response.arrayBuffer())
+        .then(arrayBuffer => {
+            if (audioCtx) {
+                audioCtx.decodeAudioData(arrayBuffer, buffer => {
+                    sounds[name] = buffer;
+                    assetsLoaded++;
+                }, e => {
+                    console.warn('Error decoding audio data for', src, e);
+                    assetsLoaded++;
+                });
+            } else {
+                assetsLoaded++; // Fallback if no AudioContext
+            }
+        })
+        .catch(e => {
+            console.warn('Failed to fetch', src, e);
+            assetsLoaded++;
+        });
 }
 
 function playSound(name) {
-    if (!audioUnlocked) return;
-    const s = sounds[name];
-    if (!s) return;
-    const clone = s.cloneNode();
-    clone.volume = s.volume;
-    clone.play().catch(() => {});
+    if (!audioUnlocked || !audioCtx || !sounds[name]) return;
+    try {
+        const source = audioCtx.createBufferSource();
+        source.buffer = sounds[name];
+        source.connect(audioCtx.destination);
+        source.start(0);
+    } catch (e) {
+        console.warn('Failed to play sound', name, e);
+    }
 }
 
 loadImage('background', 'assets/textures/background.png');
