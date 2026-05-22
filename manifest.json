@@ -1,0 +1,17 @@
+{
+    "name": "Flappy Bird",
+    "short_name": "Flappy",
+    "description": "Classic Flappy Bird game",
+    "start_url": ".",
+    "display": "fullscreen",
+    "orientation": "portrait",
+    "background_color": "#000000",
+    "theme_color": "#70c5ce",
+    "icons": [
+        {
+            "src": "assets/textures/bird.png",
+            "sizes": "102x36",
+            "type": "image/png"
+        }
+    ]
+}
